@@ -3,13 +3,14 @@ import multer from "multer";
 import cors from "cors";
 import sharp from "sharp";
 import fs from "fs";
+import crypto from "crypto";
 
 import {
   S3Client,
   PutObjectCommand,
   ListObjectsV2Command,
-  HeadObjectCommand,
-  GetObjectCommand
+  GetObjectCommand,
+  HeadObjectCommand
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -36,7 +37,7 @@ app.use(
   })
 );
 
-// ✅ Ensure uploads/ exists (important on Render)
+// ✅ Ensure uploads/ exists (Render filesystem is ephemeral, but writable)
 const UPLOAD_DIR = "uploads";
 try {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -82,34 +83,6 @@ function safeTrim(v, fallback) {
   return s ? s : fallback;
 }
 
-/**
- * ✅ IMPORTANT FIX:
- * R2/S3 metadata becomes HTTP headers (x-amz-meta-*) and MUST be ASCII.
- * So we must ensure keys/metadata values we store are ASCII-safe.
- */
-function sanitizeForKey(name) {
-  const s = safeTrim(name, "anon").toLowerCase();
-
-  // Keep only ASCII a-z 0-9 _ -
-  // Convert spaces to underscore, drop everything else.
-  const ascii = s
-    .replace(/\s+/g, "_")
-    .replace(/[^a-z0-9_-]/g, "")
-    .slice(0, 80);
-
-  return ascii || "anon";
-}
-
-async function signGet(key) {
-  const cmd = new GetObjectCommand({ Bucket: R2_BUCKET, Key: key });
-  return getSignedUrl(s3, cmd, { expiresIn: SIGNED_URL_EXPIRES_SECONDS });
-}
-
-async function headMetadata(key) {
-  const head = await s3.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: key }));
-  return head?.Metadata || {};
-}
-
 function assertR2Configured(res) {
   if (!hasR2Config) {
     res.status(500).json({
@@ -119,6 +92,23 @@ function assertR2Configured(res) {
     return false;
   }
   return true;
+}
+
+async function signGet(key) {
+  const cmd = new GetObjectCommand({ Bucket: R2_BUCKET, Key: key });
+  return getSignedUrl(s3, cmd, { expiresIn: SIGNED_URL_EXPIRES_SECONDS });
+}
+
+function makeId() {
+  // ASCII-safe id: time + random
+  return `${Date.now()}_${crypto.randomBytes(6).toString("hex")}`;
+}
+
+async function streamToString(body) {
+  // AWS SDK v3 GetObject Body is a stream
+  const chunks = [];
+  for await (const chunk of body) chunks.push(chunk);
+  return Buffer.concat(chunks).toString("utf-8");
 }
 
 // ==========================
@@ -133,27 +123,24 @@ app.get("/health", (req, res) => {
 });
 
 // ==========================
-// ✅ Upload endpoint (ORIGINAL + THUMB)
+// ✅ Upload endpoint (ORIGINAL + THUMB + META JSON)
 // ==========================
 app.post("/upload", upload.single("photo"), async (req, res) => {
   try {
     if (!assertR2Configured(res)) return;
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
-    // NOTE: name can be Hebrew — that's fine for UX — but we DO NOT put it in R2 metadata headers.
-    const rawName = safeTrim(req.body.name, "anon");
-    const nameForKey = sanitizeForKey(rawName);
+    const uploaderNameHebrew = safeTrim(req.body.name, "ללא שם"); // ✅ keep Hebrew
+    const visibility = safeTrim(req.body.visibility, "private") === "public" ? "public" : "private";
 
-    const visibility = safeTrim(req.body.visibility, "private"); // keep your default
-    const ext = (req.file.originalname.split(".").pop() || "jpg").toLowerCase();
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-
-    // ✅ Keys are ASCII-safe now
-    const originalName = `${nameForKey}_${timestamp}.${ext}`;
-    const thumbName = `thumbs/${nameForKey}_${timestamp}.jpg`;
+    const id = makeId();
+    const originalKey = `photos/${id}.jpg`;
+    const thumbKey = `thumbs/${id}.jpg`;
+    const metaKey = `meta/${id}.json`;
 
     const thumbPath = `${req.file.path}_thumb.jpg`;
 
+    // ✅ IMPORTANT FIX: bake rotation into thumbnail
     await sharp(req.file.path)
       .rotate()
       .withMetadata({ orientation: 1 })
@@ -161,42 +148,65 @@ app.post("/upload", upload.single("photo"), async (req, res) => {
       .jpeg({ quality: 70 })
       .toFile(thumbPath);
 
-    // ✅ Upload original to R2
+    // Upload original
     await s3.send(
       new PutObjectCommand({
         Bucket: R2_BUCKET,
-        Key: originalName,
+        Key: originalKey,
         Body: fs.createReadStream(req.file.path),
-        ContentType: req.file.mimetype,
+        ContentType: req.file.mimetype || "image/jpeg",
+        // ✅ Metadata must be ASCII; keep it minimal
         Metadata: {
-          visibility,      // ASCII
-          thumb: thumbName // ASCII (fixed)
+          visibility,
+          meta: metaKey
         }
       })
     );
 
-    // ✅ Upload thumbnail to R2
+    // Upload thumb
     await s3.send(
       new PutObjectCommand({
         Bucket: R2_BUCKET,
-        Key: thumbName,
+        Key: thumbKey,
         Body: fs.createReadStream(thumbPath),
         ContentType: "image/jpeg",
         Metadata: {
-          visibility, // ASCII
-          isthumb: "true"
+          visibility,
+          isthumb: "true",
+          meta: metaKey
         }
       })
     );
 
+    // Upload JSON meta (Hebrew-safe because it's file content, not headers)
+    const metaObj = {
+      id,
+      uploader: uploaderNameHebrew,
+      visibility,
+      originalKey,
+      thumbKey,
+      createdAt: new Date().toISOString()
+    };
+
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: R2_BUCKET,
+        Key: metaKey,
+        Body: JSON.stringify(metaObj),
+        ContentType: "application/json; charset=utf-8"
+      })
+    );
+
+    // cleanup temp files
     fs.unlink(req.file.path, () => {});
     fs.unlink(thumbPath, () => {});
 
     res.json({
       ok: true,
+      id,
       bucket: R2_BUCKET,
-      objectName: originalName,
-      thumbObject: thumbName,
+      objectName: originalKey,
+      thumbObject: thumbKey,
       visibility
     });
   } catch (err) {
@@ -206,7 +216,7 @@ app.post("/upload", upload.single("photo"), async (req, res) => {
 });
 
 // ==========================
-// ✅ Photos endpoint (returns thumb + full)
+// ✅ Photos endpoint (reads META JSON so Hebrew names work)
 // ==========================
 app.get("/photos", async (req, res) => {
   try {
@@ -215,75 +225,76 @@ app.get("/photos", async (req, res) => {
     const requestPassword = safeTrim(req.header("x-gallery-password"), "");
     const isAdmin = requestPassword === ADMIN_PASSWORD;
 
-    const allKeys = [];
+    // 1) list meta files (source of truth)
+    const metaKeys = [];
     let ContinuationToken = undefined;
 
     do {
       const out = await s3.send(
         new ListObjectsV2Command({
           Bucket: R2_BUCKET,
+          Prefix: "meta/",
           ContinuationToken
         })
       );
 
       (out.Contents || []).forEach((o) => {
-        if (o?.Key) allKeys.push({ key: o.Key, lastModified: o.LastModified });
+        if (o?.Key) metaKeys.push({ key: o.Key, lastModified: o.LastModified });
       });
 
       ContinuationToken = out.IsTruncated ? out.NextContinuationToken : undefined;
     } while (ContinuationToken);
 
-    allKeys.sort((a, b) => {
+    // newest first
+    metaKeys.sort((a, b) => {
       const ta = a.lastModified ? new Date(a.lastModified).getTime() : 0;
       const tb = b.lastModified ? new Date(b.lastModified).getTime() : 0;
       return tb - ta;
     });
 
-    const originals = allKeys.filter((o) => !o.key.startsWith("thumbs/"));
+    const photos = [];
+    for (const mk of metaKeys) {
+      try {
+        const obj = await s3.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: mk.key }));
+        const jsonStr = await streamToString(obj.Body);
+        const meta = JSON.parse(jsonStr);
 
-    const visibleOriginals = [];
-    for (const o of originals) {
-      const meta = await headMetadata(o.key);
-      const vis = safeTrim(meta.visibility, "private");
-      if (isAdmin || vis === "public") visibleOriginals.push({ ...o, meta });
-    }
+        const vis = safeTrim(meta.visibility, "private");
+        if (!isAdmin && vis !== "public") continue;
 
-    const photos = await Promise.all(
-      visibleOriginals.map(async ({ key, lastModified, meta }) => {
-        const thumbPath = meta.thumb;
+        const signedUrl = await signGet(meta.originalKey);
+        const signedThumbUrl = await signGet(meta.thumbKey);
 
-        const signedUrl = await signGet(key);
-
-        let signedThumbUrl = signedUrl;
-        if (thumbPath) {
-          signedThumbUrl = await signGet(thumbPath);
-        }
-
-        let contentType = null;
+        // optional: head for size/contentType/updated
         let size = null;
-        let updated = lastModified || null;
+        let contentType = null;
+        let updated = mk.lastModified || null;
         try {
           const head = await s3.send(
-            new HeadObjectCommand({ Bucket: R2_BUCKET, Key: key })
+            new HeadObjectCommand({ Bucket: R2_BUCKET, Key: meta.originalKey })
           );
-          contentType = head.ContentType || null;
           size = head.ContentLength != null ? String(head.ContentLength) : null;
+          contentType = head.ContentType || null;
           updated = head.LastModified || updated;
         } catch {
           // ignore
         }
 
-        return {
-          name: key,
+        photos.push({
+          id: meta.id,
+          name: meta.originalKey, // keep for compatibility
+          uploader: meta.uploader, // ✅ Hebrew name
           signedUrl,
           signedThumbUrl,
-          visibility: safeTrim(meta.visibility, "private"),
+          visibility: vis,
           updated,
           size,
           contentType
-        };
-      })
-    );
+        });
+      } catch (e) {
+        console.warn("Failed parsing meta:", mk.key, e?.message || e);
+      }
+    }
 
     res.json({ ok: true, admin: isAdmin, photos });
   } catch (err) {
