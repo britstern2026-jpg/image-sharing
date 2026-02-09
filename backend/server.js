@@ -3,7 +3,6 @@ import multer from "multer";
 import cors from "cors";
 import sharp from "sharp";
 import fs from "fs";
-import path from "path";
 
 import {
   S3Client,
@@ -18,7 +17,6 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "1234";
 
 const app = express();
 
-// If you want to lock CORS down later, set FRONTEND_ORIGINS="https://britstern2026-jpg.github.io"
 const FRONTEND_ORIGINS = (process.env.FRONTEND_ORIGINS || "")
   .split(",")
   .map((s) => s.trim())
@@ -27,13 +25,8 @@ const FRONTEND_ORIGINS = (process.env.FRONTEND_ORIGINS || "")
 app.use(
   cors({
     origin: (origin, cb) => {
-      // allow curl / same-origin / server-to-server
       if (!origin) return cb(null, true);
-
-      // if not configured, keep behavior similar to your original `app.use(cors())`
-      // (open CORS), to avoid breaking during setup.
       if (FRONTEND_ORIGINS.length === 0) return cb(null, true);
-
       return FRONTEND_ORIGINS.includes(origin)
         ? cb(null, true)
         : cb(new Error(`CORS blocked origin: ${origin}`), false);
@@ -43,14 +36,11 @@ app.use(
   })
 );
 
-// ==========================
-// ✅ Ensure uploads/ exists (Render filesystem is ephemeral, but writable)
-// ==========================
+// ✅ Ensure uploads/ exists (important on Render)
 const UPLOAD_DIR = "uploads";
 try {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 } catch (e) {
-  // If this fails, uploads will fail anyway, but keep the error visible.
   console.error("Failed to create uploads directory:", e);
 }
 
@@ -64,7 +54,6 @@ const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || "";
 const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || "";
 const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || "";
 
-// Signed URL expiry (same logic as your 7 days in GCS)
 const SIGNED_URL_EXPIRES_SECONDS = Number(
   process.env.SIGNED_URL_EXPIRES_SECONDS || 7 * 24 * 60 * 60
 );
@@ -93,13 +82,22 @@ function safeTrim(v, fallback) {
   return s ? s : fallback;
 }
 
+/**
+ * ✅ IMPORTANT FIX:
+ * R2/S3 metadata becomes HTTP headers (x-amz-meta-*) and MUST be ASCII.
+ * So we must ensure keys/metadata values we store are ASCII-safe.
+ */
 function sanitizeForKey(name) {
-  // keep it close to your original behavior but avoid weird keys:
-  // convert spaces -> underscore, remove problematic chars
-  return safeTrim(name, "photo")
-    .replace(/[^\p{L}\p{N}\s_-]/gu, "")
+  const s = safeTrim(name, "anon").toLowerCase();
+
+  // Keep only ASCII a-z 0-9 _ -
+  // Convert spaces to underscore, drop everything else.
+  const ascii = s
     .replace(/\s+/g, "_")
-    .slice(0, 80) || "photo";
+    .replace(/[^a-z0-9_-]/g, "")
+    .slice(0, 80);
+
+  return ascii || "anon";
 }
 
 async function signGet(key) {
@@ -142,21 +140,20 @@ app.post("/upload", upload.single("photo"), async (req, res) => {
     if (!assertR2Configured(res)) return;
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
-    const rawName = safeTrim(req.body.name, "photo");
+    // NOTE: name can be Hebrew — that's fine for UX — but we DO NOT put it in R2 metadata headers.
+    const rawName = safeTrim(req.body.name, "anon");
     const nameForKey = sanitizeForKey(rawName);
 
     const visibility = safeTrim(req.body.visibility, "private"); // keep your default
     const ext = (req.file.originalname.split(".").pop() || "jpg").toLowerCase();
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
 
+    // ✅ Keys are ASCII-safe now
     const originalName = `${nameForKey}_${timestamp}.${ext}`;
     const thumbName = `thumbs/${nameForKey}_${timestamp}.jpg`;
 
-    // ✅ Create thumbnail locally
     const thumbPath = `${req.file.path}_thumb.jpg`;
 
-    // ✅ IMPORTANT FIX (kept from your code):
-    // Bake rotation + force orientation=1 so thumbs never appear sideways in any browser
     await sharp(req.file.path)
       .rotate()
       .withMetadata({ orientation: 1 })
@@ -172,8 +169,8 @@ app.post("/upload", upload.single("photo"), async (req, res) => {
         Body: fs.createReadStream(req.file.path),
         ContentType: req.file.mimetype,
         Metadata: {
-          visibility,
-          thumb: thumbName
+          visibility,      // ASCII
+          thumb: thumbName // ASCII (fixed)
         }
       })
     );
@@ -186,13 +183,12 @@ app.post("/upload", upload.single("photo"), async (req, res) => {
         Body: fs.createReadStream(thumbPath),
         ContentType: "image/jpeg",
         Metadata: {
-          visibility,
+          visibility, // ASCII
           isthumb: "true"
         }
       })
     );
 
-    // cleanup temp files
     fs.unlink(req.file.path, () => {});
     fs.unlink(thumbPath, () => {});
 
@@ -219,7 +215,6 @@ app.get("/photos", async (req, res) => {
     const requestPassword = safeTrim(req.header("x-gallery-password"), "");
     const isAdmin = requestPassword === ADMIN_PASSWORD;
 
-    // List all objects (event scale)
     const allKeys = [];
     let ContinuationToken = undefined;
 
@@ -238,17 +233,14 @@ app.get("/photos", async (req, res) => {
       ContinuationToken = out.IsTruncated ? out.NextContinuationToken : undefined;
     } while (ContinuationToken);
 
-    // newest first (same intent as your GCS updated sort)
     allKeys.sort((a, b) => {
       const ta = a.lastModified ? new Date(a.lastModified).getTime() : 0;
       const tb = b.lastModified ? new Date(b.lastModified).getTime() : 0;
       return tb - ta;
     });
 
-    // ✅ remove thumbnails from list (we link them via metadata)
     const originals = allKeys.filter((o) => !o.key.startsWith("thumbs/"));
 
-    // filter public unless admin (visibility is stored in object metadata)
     const visibleOriginals = [];
     for (const o of originals) {
       const meta = await headMetadata(o.key);
@@ -262,12 +254,11 @@ app.get("/photos", async (req, res) => {
 
         const signedUrl = await signGet(key);
 
-        let signedThumbUrl = signedUrl; // fallback = full image
+        let signedThumbUrl = signedUrl;
         if (thumbPath) {
           signedThumbUrl = await signGet(thumbPath);
         }
 
-        // Try to head for contentType/size (optional but matches your response fields)
         let contentType = null;
         let size = null;
         let updated = lastModified || null;
@@ -301,8 +292,5 @@ app.get("/photos", async (req, res) => {
   }
 });
 
-// ==========================
-// ✅ Start server
-// ==========================
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
