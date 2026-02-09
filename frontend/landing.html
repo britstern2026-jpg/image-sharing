@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <title>כניסה</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+
+<body>
+  <main class="page">
+    <section class="card">
+      <header class="header">
+        <h1>כניסה 🔒</h1>
+        <p class="subtitle">הזינו סיסמה כדי להמשיך.</p>
+      </header>
+
+      <div class="field">
+        <label for="pw">סיסמה</label>
+        <input id="pw" type="password" placeholder="הזן סיסמה" autocomplete="off" />
+      </div>
+
+      <button id="enterBtn" class="btn" type="button">
+        <span class="btnText">כניסה</span>
+        <span class="spinner" aria-hidden="true"></span>
+      </button>
+
+      <p id="status" class="status"></p>
+
+      <footer class="footer">
+        <p class="tiny">גרסה: landing-v1</p>
+      </footer>
+    </section>
+  </main>
+
+  <script>
+    const PASSWORD = "1234"; // 🔴 same hard-coded password you had before
+
+    const pwInput = document.getElementById("pw");
+    const enterBtn = document.getElementById("enterBtn");
+    const statusEl = document.getElementById("status");
+    const spinner = enterBtn.querySelector(".spinner");
+    const btnText = enterBtn.querySelector(".btnText");
+
+    function setLoading(isLoading) {
+      enterBtn.disabled = isLoading;
+      spinner.style.display = isLoading ? "inline-block" : "none";
+      btnText.textContent = isLoading ? "בודק..." : "כניסה";
+    }
+
+    enterBtn.addEventListener("click", () => {
+      const val = pwInput.value.trim();
+
+      if (!val) {
+        statusEl.textContent = "נא להזין סיסמה";
+        statusEl.className = "status err";
+        return;
+      }
+
+      setLoading(true);
+
+      // tiny delay for UX consistency
+      setTimeout(() => {
+        if (val === PASSWORD) {
+          localStorage.setItem("landing_ok", "1");
+
+          // ✅ ONLY CHANGE: go to upload.html (not index.html)
+          window.location.href = "upload.html";
+        } else {
+          statusEl.textContent = "❌ סיסמה שגויה";
+          statusEl.className = "status err";
+          setLoading(false);
+        }
+      }, 300);
+    });
+
+    pwInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        enterBtn.click();
+      }
+    });
+  </script>
+</body>
+</html>

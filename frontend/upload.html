@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <title>הברית של ✨</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+
+<body>
+  <main class="page">
+    <section class="card">
+      <header class="header">
+        <div class="headerTop">
+          <h1 class="title">הברית של ✨</h1>
+<!--          <a class="iconBtn" href="gallery.html" aria-label="גלריה">🔒</a>-->
+          <a class="iconBtn" href="owner.html" aria-label="כניסת בעל האירוע" title="כניסת בעל האירוע">🔒</a>
+
+        </div>
+
+        <p class="subtitle">נשמח לראות את התמונות שלכם.</p>
+      </header>
+
+      <div class="field">
+        <label for="nameInput">שם (לא חובה)</label>
+        <input id="nameInput" type="text" placeholder=" " autocomplete="off" />
+        <small class="hint">כך תוכלו לבחור את השם שלכם בגלריה ולצפות בכל התמונות שלכם.</small>
+      </div>
+
+      <!-- ✅ Visibility checkbox (already exists) -->
+      <div class="field">
+        <label>מי יכול לראות?</label>
+
+        <div class="checkboxRow">
+          <input id="publicCheckbox" type="checkbox" checked />
+          <label for="publicCheckbox" class="checkboxLabel">
+            כולם (הצג בגלריה)
+          </label>
+        </div>
+
+        <small class="hint">
+          אם לא מסומן — התמונה תישמר רק לבעל האירוע ולא תופיע בגלריה.
+        </small>
+      </div>
+
+      <div class="field">
+        <label>צילום / בחירת תמונה</label>
+
+        <!-- ✅ Real file input: must exist for iPhone Chrome -->
+        <input id="photoInput" type="file" accept="image/*" class="realFileInput" />
+
+        <!-- ✅ Most reliable on iOS: use LABEL styled like a button -->
+        <label for="photoInput" id="pickBtn" class="btnSecondary">
+          לבחור / לצלם תמונה
+        </label>
+
+        <div id="fileName" class="fileName">לא נבחרה תמונה</div>
+      </div>
+
+      <div class="previewWrap">
+        <img id="preview" class="preview" alt="תצוגה מקדימה"/>
+      </div>
+
+      <button id="uploadBtn" class="btn" disabled>
+        <span class="btnText">העלאה</span>
+        <span class="spinner" aria-hidden="true"></span>
+      </button>
+
+      <p id="status" class="status"></p>
+
+      <!-- ✅ NEW: Gallery button -->
+      <a class="btnSecondary" href="gallery.html" style="margin-top: 12px; text-decoration: none;">
+        צפייה בגלריה 📸
+      </a>
+
+      <hr class="divider" >
+      <footer class="footer">
+        <p class="tiny">להזמנות פנו לליטל.</p>
+        <p class="tiny">גרסה:v9.3</p>
+      </footer>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

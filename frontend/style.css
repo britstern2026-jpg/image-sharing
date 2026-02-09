@@ -1,0 +1,635 @@
+:root {
+  /* ✅ Main dominant background */
+  --bg1: #EDE4B5;
+  --bg2: #E2D7A6;
+
+  /* ✅ Card */
+  --card: rgba(255, 255, 255, 0.70);
+  --cardBorder: rgba(0, 0, 0, 0.08);
+
+  /* ✅ Text (dark mode flipped to light background) */
+  --text: rgba(20, 16, 10, 0.92);
+  --muted: rgba(20, 16, 10, 0.70);
+  --hint: rgba(20, 16, 10, 0.55);
+
+  /* ✅ Accent colors now dark */
+  --accent: #2a2418;
+  --accentBlue: #3a3222;
+
+  /* ✅ Shadow + radius */
+  --shadow: 0 18px 50px rgba(0,0,0,0.18);
+  --radius: 18px;
+}
+
+* { box-sizing: border-box; }
+
+/* ✅ Hard stop: never allow horizontal overflow on iOS */
+html, body {
+  height: 100%;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden !important;
+}
+
+/* ✅ Extra iOS fix: clip anything that still overflows */
+body {
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  color: var(--text);
+
+  /* Safe area padding */
+  padding: calc(18px + env(safe-area-inset-top))
+           calc(14px + env(safe-area-inset-right))
+           calc(18px + env(safe-area-inset-bottom))
+           calc(14px + env(safe-area-inset-left));
+
+  /* ✅ Prevent background rendering overflow issues */
+  background-clip: padding-box;
+  position: relative;
+
+  background:
+    radial-gradient(1200px 800px at 20% 0%, rgba(42, 36, 24, 0.10) 0%, transparent 60%),
+    radial-gradient(1000px 700px at 100% 30%, rgba(58, 50, 34, 0.10) 0%, transparent 55%),
+    linear-gradient(180deg, var(--bg1), var(--bg2));
+}
+
+/* ✅ A wrapper that clips any tiny overflow caused by gradients */
+.page {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip; /* better than hidden on modern iOS */
+  min-height: 100svh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+}
+
+.card {
+  width: 100%;
+  max-width: 480px;
+
+  /* ✅ Prevent card ever stretching beyond screen */
+  min-width: 0;
+  overflow: hidden;
+
+  background: var(--card);
+  border: 1px solid var(--cardBorder);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px;
+  backdrop-filter: blur(10px);
+}
+
+.header h1 {
+  margin: 0 0 6px;
+  font-size: 24px;
+  letter-spacing: 0.2px;
+}
+
+.subtitle {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.divider {
+  border: 0;
+  height: 1px;
+  background: rgba(0, 0, 0, 0.35);
+  margin-top: 40px;
+  margin-bottom: 0;
+  width: 100%;
+}
+
+label {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+input[type="text"],
+input[type="password"] {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+
+  border-radius: 14px;
+  border: 1px solid rgba(0,0,0,0.12);
+  background: rgba(255,255,255,0.60);
+  color: var(--text);
+  padding: 14px 12px;
+
+  font-size: 16px; /* ✅ prevents iPhone zoom + tiny look */
+  line-height: 1.2;
+  font-weight: 600;
+
+  outline: none;
+
+  /* ✅ iOS / Safari consistency */
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+input[type="text"]:focus,
+input[type="password"]:focus {
+  border-color: rgba(42, 36, 24, 0.35);
+  box-shadow: 0 0 0 4px rgba(42, 36, 24, 0.16);
+}
+
+input[type="text"]::placeholder,
+input[type="password"]::placeholder {
+  color: rgba(20, 16, 10, 0.40);
+  font-weight: 500;
+}
+
+.hint {
+  color: var(--hint);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+/* =========================
+   ✅ Checkbox (Visibility)
+   ========================= */
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 14px;
+  background: rgba(0,0,0,0.16);
+}
+
+.checkboxRow input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent); /* modern browsers */
+  cursor: pointer;
+}
+
+.checkboxLabel {
+  font-size: 15px;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+
+/* ✅ Keep file input present for iOS, but invisible */
+.realFileInput {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Custom secondary button */
+.btnSecondary {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+
+  border-radius: 14px;
+  padding: 14px 14px;
+  font-size: 16px;
+  font-weight: 700;
+  /*color: var(--text);*/
+  /*background: rgba(255,255,255,0.12);*/
+  /*border: 1px solid rgba(255,255,255,0.18);*/
+  background: rgba(0,0,0,0.06);
+  border: 1px solid rgba(0,0,0,0.10);
+  color: var(--text);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fileName {
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--muted);
+  word-break: break-word;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.previewWrap { margin-top: 12px; }
+
+.preview {
+  width: 100%;
+  max-width: 100%;
+  display: none;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(0,0,0,0.2);
+  max-height: 340px;
+  object-fit: cover;
+}
+
+.btn {
+  margin-top: 14px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+
+  border: none;
+  border-radius: 14px;
+  padding: 16px 14px;
+  font-size: 16px;
+  font-weight: 800;
+  /*color: white;*/
+  /*background: linear-gradient(135deg, var(--accent), var(--accentBlue));*/
+  background: linear-gradient(135deg, var(--accent), var(--accentBlue));
+  color: #ffffff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: transform 0.06s ease, opacity 0.2s ease;
+}
+
+.btn:active { transform: scale(0.99); }
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.35);
+  border-top-color: rgba(255,255,255,0.95);
+  display: none;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.status {
+  margin: 14px 0 0;
+  font-size: 14px;
+  color: var(--muted);
+  min-height: 22px;
+  line-height: 1.4;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+.status.ok { color: rgba(34, 197, 94, 0.95); }
+.status.err { color: rgba(239, 68, 68, 0.95); }
+
+.footer {
+  margin-top: 2px;
+  border-top: 1px solid rgba(255,255,255,0.10);
+  padding-top: 12px;
+}
+
+.tiny {
+  margin: 0;
+  color: var(--hint);
+  font-size: 12px;
+  line-height: 1.35;
+  max-width: 100%;
+}
+
+/* Small iPhones */
+@media (max-width: 420px) {
+  .card { padding: 16px; }
+  .header h1 { font-size: 22px; }
+  .btn { padding: 18px 14px; }
+}
+
+/* RTL alignment */
+body { direction: rtl; }
+
+.header h1,
+.subtitle,
+label,
+.hint,
+.fileName,
+.status,
+.tiny,
+.checkboxLabel {
+  text-align: right;
+}
+
+/* =========================
+   GALLERY GRID
+========================= */
+
+.galleryGrid {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 4px;
+  margin-top: 16px;
+}
+
+/* Each card is a clickable tile */
+.photoCard {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;          /* ✅ square tiles */
+  border-radius: 18px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  text-decoration: none;
+  display: block;
+}
+
+/* Image fills the entire tile */
+.photoImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;            /* ✅ no distortion, crops nicely */
+  display: block;
+}
+
+/* Filename overlay instead of pushing layout */
+.photoMeta {
+  display: none;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+
+  padding: 6px 6px;
+  font-size: 10px;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.9);
+
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.55),
+    rgba(0, 0, 0, 0)
+  );
+
+  text-align: center;
+
+  direction: ltr;                /* ✅ filenames look better */
+  word-break: break-word;
+}
+
+/* Slight hover effect (desktop only) */
+@media (hover: hover) {
+  .photoCard:hover {
+    transform: translateY(-2px);
+    transition: 120ms ease;
+  }
+}
+
+/* =========================
+   GALLERY CONTROLS
+========================= */
+
+.galleryControls{
+  margin-top: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.galleryLabel{
+  font-size: 14px;
+  color: var(--muted);
+  text-align: right;
+}
+
+.gallerySelect{
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+
+  border-radius: 14px;
+  border: 1px solid rgba(0,0,0,0.12);
+  background: rgba(255,255,255,0.60);
+  color: var(--text);
+
+  padding: 14px 12px;      /* ✅ bigger + matches inputs */
+  font-size: 16px;         /* ✅ prevents iPhone zoom */
+  font-weight: 600;
+  line-height: 1.2;
+
+  outline: none;
+
+  /* ✅ iOS fixes */
+  -webkit-appearance: none;
+  appearance: none;
+
+  /* ✅ make room for arrow */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' fill='none' stroke='%232a2418' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 8 10 12 14 8'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: left 12px center;   /* RTL: arrow on left */
+  background-size: 18px;
+  padding-left: 42px;       /* ✅ space for arrow */
+}
+
+.gallerySelect:focus{
+  border-color: rgba(42, 36, 24, 0.35);
+  box-shadow: 0 0 0 4px rgba(42, 36, 24, 0.16);
+}
+
+.galleryClearBtn{
+  padding: 12px 14px;
+}
+
+/* Make photoCard button behave like a card */
+.photoCard{
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  background: none;
+}
+
+/* =========================
+   VIEWER MODAL
+========================= */
+
+.viewer{
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.viewer.hidden{
+  display: none;
+}
+
+.viewerBackdrop{
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.70);
+}
+
+.viewerBody{
+  position: relative;
+  width: min(92vw, 900px);
+  height: min(82vh, 700px);
+  border-radius: 18px;
+  overflow: hidden;
+  background: rgba(20,16,10,0.92);
+  border: 1px solid rgba(255,255,255,0.15);
+  box-shadow: 0 25px 80px rgba(0,0,0,0.55);
+  display: grid;
+  grid-template-rows: 1fr auto;
+}
+
+.viewerImg{
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  background: rgba(0,0,0,0.25);
+}
+
+.viewerClose{
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(0,0,0,0.35);
+  color: #fff;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.viewerNav{
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 64px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(0,0,0,0.35);
+  color: #fff;
+  font-size: 34px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.viewerPrev{ right: 10px; }
+.viewerNext{ left: 10px; }
+
+.viewerMeta{
+  padding: 12px 14px;
+  border-top: 1px solid rgba(255,255,255,0.12);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: rgba(255,255,255,0.92);
+}
+
+.viewerName{
+  font-size: 14px;
+  color: rgba(255,255,255,0.85);
+}
+
+.viewerOpen{
+  font-size: 14px;
+  color: #EDE4B5;
+  text-decoration: none;
+  border: 1px solid rgba(237,228,181,0.35);
+  padding: 8px 10px;
+  border-radius: 12px;
+}
+
+.viewerLoader{
+  pointer-events: none; /* ✅ allow clicking X / arrows while loading */
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  gap: 10px;
+  background: rgba(0,0,0,0.35);
+  z-index: 2;
+}
+
+.viewerLoader.hidden{
+  display: none;
+}
+
+.loaderSpinner{
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 4px solid rgba(255,255,255,0.25);
+  border-top-color: rgba(255,255,255,0.95);
+  animation: spin 0.9s linear infinite;
+}
+
+.loaderText{
+  font-size: 14px;
+  color: rgba(255,255,255,0.92);
+}
+
+/* =========================
+   HEADER ICON BUTTON (extra)
+========================= */
+
+.headerTop{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.title{
+  margin: 0;
+}
+
+.iconBtn{
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+
+  text-decoration: none;
+  font-size: 18px;
+  line-height: 1;
+
+  border: 1px solid rgba(0,0,0,0.12);
+  background: rgba(255,255,255,0.55);
+  color: var(--text);
+
+  box-shadow: 0 10px 30px rgba(0,0,0,0.10);
+}
+
+@media (hover: hover){
+  .iconBtn:hover{
+    transform: translateY(-1px);
+    transition: 120ms ease;
+  }
+}
+
+.iconBtn:active{
+  transform: translateY(0px);
+}
+

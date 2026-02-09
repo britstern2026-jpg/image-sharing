@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <title>גלריה</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+
+<body>
+  <main class="page">
+    <section class="card">
+      <header class="header">
+        <h1>גלריה 📸</h1>
+        <p class="subtitle">כאן מופיעות רק תמונות שסומנו "כולם".</p>
+      </header>
+
+      <a class="btnSecondary" href="upload.html" style="margin-top: 14px; text-decoration: none;">
+        חזרה
+      </a>
+
+      <!-- ✅ NEW: Filter by uploader -->
+      <div class="galleryControls">
+        <label class="galleryLabel" for="nameFilter">סינון לפי שם מעלה</label>
+        <select id="nameFilter" class="gallerySelect">
+          <option value="">הכל</option>
+        </select>
+
+        <button id="clearFilterBtn" class="btnSecondary galleryClearBtn" type="button">
+          נקה סינון
+        </button>
+      </div>
+
+      <div id="galleryStatus" class="status">טוען תמונות...</div>
+      <div id="galleryCount" class="status"></div>
+
+      <div id="galleryGrid" class="galleryGrid"></div>
+
+      <footer class="footer">
+        <p class="tiny">גרסה: 3.2.v9</p>
+      </footer>
+    </section>
+  </main>
+
+  <!-- ✅ NEW: Modal viewer (popup) -->
+  <div id="viewer" class="viewer hidden" aria-hidden="true">
+    <div class="viewerBackdrop" id="viewerBackdrop"></div>
+
+    <div class="viewerBody">
+      <button class="viewerClose" id="viewerClose" aria-label="סגור">✕</button>
+
+      <button class="viewerNav viewerPrev" id="viewerPrev" aria-label="קודם">‹</button>
+
+      <div id="viewerLoader" class="viewerLoader">
+        <div class="loaderSpinner"></div>
+        <div class="loaderText">טוען תמונה...</div>
+      </div>
+
+      <img id="viewerImg" class="viewerImg" alt="תמונה"/>
+      <button class="viewerNav viewerNext" id="viewerNext" aria-label="הבא">›</button>
+
+      <div class="viewerMeta">
+        <div id="viewerName" class="viewerName"></div>
+        <a id="viewerOpen" class="viewerOpen" href="#" target="_blank" rel="noopener">פתח מקור</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="gallery.js"></script>
+</body>
+</html>

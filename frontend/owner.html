@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <title>כניסת בעל האירוע</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+
+<body>
+  <main class="page">
+    <section class="card">
+      <header class="header">
+        <h1>🔒 כניסה לבעל האירוע</h1>
+        <p class="subtitle">כדי לראות גם תמונות פרטיות יש להזין סיסמה.</p>
+      </header>
+
+      <div class="field">
+        <label for="pw">סיסמה</label>
+        <input id="pw" type="password" placeholder="הזן סיסמה" autocomplete="off" />
+      </div>
+
+      <button id="enterBtn" class="btn">
+        <span class="btnText">כניסה</span>
+        <span class="spinner" aria-hidden="true"></span>
+      </button>
+
+      <p id="status" class="status"></p>
+
+      <a class="btnSecondary" href="upload.html" style="margin-top: 14px; text-decoration:none;">
+        חזרה
+      </a>
+
+      <footer class="footer">
+        <p class="tiny">גרסה:owner-v2.1.1</p>
+      </footer>
+    </section>
+  </main>
+
+  <script src="owner.js"></script>
+</body>
+</html>

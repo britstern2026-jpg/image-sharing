@@ -1,1 +1,20 @@
-<!doctype html><html><head><meta charset="utf-8"><title>It works</title></head><body>OK</body></html>
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="refresh" content="0; url=landing.html" />
+    <title>מעביר…</title>
+  </head>
+  <body>
+    <p>
+      מעביר לדף הכניסה…
+      <a href="landing.html">לחצו כאן אם לא הועברתם</a>
+    </p>
+
+    <script>
+      // JS fallback (more reliable than meta refresh alone)
+      window.location.replace("landing.html");
+    </script>
+  </body>
+</html>
