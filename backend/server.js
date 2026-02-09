@@ -3,6 +3,7 @@ import multer from "multer";
 import cors from "cors";
 import sharp from "sharp";
 import fs from "fs";
+import path from "path";
 
 import {
   S3Client,
@@ -42,7 +43,18 @@ app.use(
   })
 );
 
-const upload = multer({ dest: "uploads/" });
+// ==========================
+// ✅ Ensure uploads/ exists (Render filesystem is ephemeral, but writable)
+// ==========================
+const UPLOAD_DIR = "uploads";
+try {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+} catch (e) {
+  // If this fails, uploads will fail anyway, but keep the error visible.
+  console.error("Failed to create uploads directory:", e);
+}
+
+const upload = multer({ dest: UPLOAD_DIR });
 
 // ==========================
 // ✅ Cloudflare R2 Config (S3-compatible)
@@ -60,6 +72,12 @@ const SIGNED_URL_EXPIRES_SECONDS = Number(
 const R2_ENDPOINT = R2_ACCOUNT_ID
   ? `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
   : "";
+
+const hasR2Config =
+  Boolean(R2_BUCKET) &&
+  Boolean(R2_ACCOUNT_ID) &&
+  Boolean(R2_ACCESS_KEY_ID) &&
+  Boolean(R2_SECRET_ACCESS_KEY);
 
 const s3 = new S3Client({
   region: "auto",
@@ -94,6 +112,17 @@ async function headMetadata(key) {
   return head?.Metadata || {};
 }
 
+function assertR2Configured(res) {
+  if (!hasR2Config) {
+    res.status(500).json({
+      error:
+        "R2 is not configured. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, and R2_BUCKET env vars."
+    });
+    return false;
+  }
+  return true;
+}
+
 // ==========================
 // ✅ Health check
 // ==========================
@@ -101,11 +130,16 @@ app.get("/", (req, res) => {
   res.send("✅ Backend is running. Use POST /upload to upload photos.");
 });
 
+app.get("/health", (req, res) => {
+  res.json({ ok: true });
+});
+
 // ==========================
 // ✅ Upload endpoint (ORIGINAL + THUMB)
 // ==========================
 app.post("/upload", upload.single("photo"), async (req, res) => {
   try {
+    if (!assertR2Configured(res)) return;
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
     const rawName = safeTrim(req.body.name, "photo");
@@ -180,6 +214,8 @@ app.post("/upload", upload.single("photo"), async (req, res) => {
 // ==========================
 app.get("/photos", async (req, res) => {
   try {
+    if (!assertR2Configured(res)) return;
+
     const requestPassword = safeTrim(req.header("x-gallery-password"), "");
     const isAdmin = requestPassword === ADMIN_PASSWORD;
 
