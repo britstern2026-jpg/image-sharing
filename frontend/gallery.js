@@ -5,11 +5,9 @@ const statusEl = document.getElementById("galleryStatus");
 const gridEl = document.getElementById("galleryGrid");
 const countEl = document.getElementById("galleryCount");
 
-// ✅ NEW filter UI
 const nameFilterEl = document.getElementById("nameFilter");
 const clearFilterBtn = document.getElementById("clearFilterBtn");
 
-// ✅ NEW viewer modal
 const viewer = document.getElementById("viewer");
 const viewerBackdrop = document.getElementById("viewerBackdrop");
 const viewerClose = document.getElementById("viewerClose");
@@ -52,17 +50,13 @@ function openViewer(index) {
   viewer.setAttribute("aria-hidden", "false");
   document.body.style.overflow = "hidden";
 
-  // ✅ show loader
   viewerLoader.classList.remove("hidden");
-
-  // ✅ reset image
   viewerImg.src = "";
   viewerImg.alt = p.name;
 
   viewerName.textContent = p.uploader;
   viewerOpen.href = p.signedUrl;
 
-  // ✅ preload full image
   const pre = new Image();
   pre.onload = () => {
     viewerImg.src = p.signedUrl;
@@ -72,17 +66,14 @@ function openViewer(index) {
     viewerLoader.classList.add("hidden");
     setStatus("❌ לא הצלחנו לטעון את התמונה", "err");
   };
-
   pre.src = p.signedUrl;
 }
 
 function closeViewer() {
   viewer.classList.add("hidden");
   viewer.setAttribute("aria-hidden", "true");
-
   viewerImg.src = "";
   viewerLoader.classList.add("hidden");
-
   document.body.style.overflow = "";
 }
 
@@ -153,24 +144,13 @@ async function loadPhotos() {
 
   try {
     const headers = { "Accept": "application/json" };
+    if (adminMode) headers["x-gallery-password"] = savedPassword;
 
-    // ✅ owner mode → send password
-    if (adminMode) {
-      headers["x-gallery-password"] = savedPassword;
-    }
-
-    const res = await fetch(`${BACKEND_URL}/photos`, {
-      method: "GET",
-      headers
-    });
-
+    const res = await fetch(`${BACKEND_URL}/photos`, { method: "GET", headers });
     const data = await res.json();
 
-    if (!res.ok || !data.ok) {
-      throw new Error(data.error || "Failed to load gallery");
-    }
+    if (!res.ok || !data.ok) throw new Error(data.error || "Failed to load gallery");
 
-    // ✅ owner requested but password wrong
     if (adminMode && !data.admin) {
       localStorage.removeItem("gallery_admin_pw");
       setStatus("❌ סיסמה לא נכונה. חוזר לעמוד הסיסמה.", "err");
@@ -179,7 +159,6 @@ async function loadPhotos() {
     }
 
     const photos = data.photos || [];
-
     if (photos.length === 0) {
       setStatus("אין תמונות להצגה כרגע.", "ok");
       return;
@@ -187,7 +166,8 @@ async function loadPhotos() {
 
     allPhotos = photos.map(p => ({
       ...p,
-      uploader: getUploaderFromFilename(p.name)
+      // ✅ Prefer API-provided Hebrew name; fallback to old filename parsing
+      uploader: (p.uploader && String(p.uploader).trim()) ? p.uploader : getUploaderFromFilename(p.name)
     }));
 
     setStatus("", "ok");
@@ -199,21 +179,20 @@ async function loadPhotos() {
       : `✅ נמצאו ${allPhotos.length} תמונות`;
 
     renderGrid(filteredPhotos);
-
   } catch (err) {
     console.error(err);
     setStatus(`❌ שגיאה: ${err.message}`, "err");
   }
 }
 
-/* ✅ Filter events */
+/* Filter events */
 nameFilterEl.addEventListener("change", applyFilter);
 clearFilterBtn.addEventListener("click", () => {
   nameFilterEl.value = "";
   applyFilter();
 });
 
-/* ✅ Viewer events */
+/* Viewer events */
 viewerClose.addEventListener("click", closeViewer);
 viewerBackdrop.addEventListener("click", closeViewer);
 viewerNext.addEventListener("click", showNext);
