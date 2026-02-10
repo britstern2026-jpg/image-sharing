@@ -28,26 +28,32 @@ if (localStorage.getItem("landing_ok") !== "1") {
 const ua = navigator.userAgent || "";
 const isAndroid = /Android/i.test(ua);
 
-// ✅ Android only: hint camera availability without breaking iPhone gallery selection
-if (isAndroid) {
-  photoInput.setAttribute("capture", "environment");
-} else {
-  photoInput.removeAttribute("capture");
-}
+/**
+ * ✅ CRITICAL FIX:
+ * Now that we have a dedicated camera input (photoInputCamera),
+ * DO NOT set capture on the normal input (photoInput).
+ * Otherwise Android "gallery" will still behave like camera.
+ */
+photoInput.removeAttribute("capture");
 
-// ✅ Show Android buttons
+// ✅ Show Android buttons (if they exist)
 if (isAndroid && androidCameraBtn && photoInputCamera) {
   androidCameraBtn.style.display = "block";
   androidCameraBtn.addEventListener("click", () => {
-    try { photoInputCamera.click(); } catch {}
+    try {
+      photoInputCamera.value = ""; // allow taking the same photo twice
+      photoInputCamera.click();
+    } catch {}
   });
 }
 
-if (isAndroid && androidLibraryBtn) {
+if (isAndroid && androidLibraryBtn && photoInput) {
   androidLibraryBtn.style.display = "block";
   androidLibraryBtn.addEventListener("click", () => {
-    // open regular gallery input
-    try { photoInput.click(); } catch {}
+    try {
+      photoInput.value = ""; // allow selecting the same file twice
+      photoInput.click();     // opens gallery picker
+    } catch {}
   });
 }
 
@@ -113,13 +119,11 @@ function readFileFromCameraInput() {
   updateUIFromFile();
 }
 
-/**
- * Keep your label behavior. On Android we already provide explicit buttons too.
- */
-if (pickBtn && isAndroid) {
-  pickBtn.addEventListener("click", (e) => {
-    e.preventDefault();
-    try { photoInput.click(); } catch {}
+// Keep your iOS-friendly label behavior.
+// On Android, we do NOT preventDefault anymore. It can still work as a fallback.
+if (pickBtn) {
+  pickBtn.addEventListener("click", () => {
+    // no-op; label default will open photoInput
   });
 }
 
@@ -153,6 +157,7 @@ if (photoInputCamera) {
     readFileFromCameraInput();
     delayedReRead();
   });
+
   photoInputCamera.addEventListener("input", () => {
     readFileFromCameraInput();
     delayedReRead();
