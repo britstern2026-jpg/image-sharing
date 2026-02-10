@@ -2,6 +2,7 @@ const BACKEND_URL = "https://image-sharing-api-1mk9.onrender.com";
 
 const nameInput = document.getElementById("nameInput");
 const photoInput = document.getElementById("photoInput");
+const pickBtn = document.getElementById("pickBtn");
 const fileNameEl = document.getElementById("fileName");
 const preview = document.getElementById("preview");
 const uploadBtn = document.getElementById("uploadBtn");
@@ -19,16 +20,15 @@ if (localStorage.getItem("landing_ok") !== "1") {
   window.location.href = "landing.html";
 }
 
+const ua = navigator.userAgent || "";
+const isAndroid = /Android/i.test(ua);
+
 // ✅ Android only: hint camera availability without breaking iPhone gallery selection
-(() => {
-  const ua = navigator.userAgent || "";
-  const isAndroid = /Android/i.test(ua);
-  if (isAndroid) {
-    photoInput.setAttribute("capture", "environment");
-  } else {
-    photoInput.removeAttribute("capture");
-  }
-})();
+if (isAndroid) {
+  photoInput.setAttribute("capture", "environment");
+} else {
+  photoInput.removeAttribute("capture");
+}
 
 function setStatus(msg, type = "") {
   statusEl.textContent = msg || "";
@@ -44,20 +44,10 @@ function setUploading(isUploading) {
   btnText.textContent = isUploading ? "מעלה..." : "העלאה";
 }
 
-/**
- * ✅ Prevent "blank page" on Android/Mac:
- * Large previews can push all UI off-screen.
- * Force preview to stay within viewport.
- */
 function applyPreviewConstraints() {
-  if (!preview) return;
-
-  // Ensure the preview can't take the whole page
   preview.style.width = "100%";
   preview.style.maxHeight = "45vh";
   preview.style.objectFit = "contain";
-
-  // If there is a parent container, also constrain it
   const parent = preview.parentElement;
   if (parent) {
     parent.style.maxHeight = "45vh";
@@ -74,18 +64,15 @@ function updateUIFromFile() {
   }
 
   fileNameEl.textContent = selectedFile.name || "נבחרה תמונה";
-
-  // Apply constraints before showing
   applyPreviewConstraints();
 
-  // Show preview (safe across platforms)
   preview.src = URL.createObjectURL(selectedFile);
   preview.style.display = "block";
 
   uploadBtn.disabled = false;
   setStatus("");
 
-  // Optional: keep the action buttons visible after capture on small screens
+  // Keep UI visible on small screens after camera return
   try {
     window.scrollTo({ top: 0, behavior: "smooth" });
   } catch {
@@ -93,14 +80,53 @@ function updateUIFromFile() {
   }
 }
 
-/**
- * iPhone Chrome reliability trick:
- * Sometimes the file appears slightly after the change event.
- */
 function readFileFromInput() {
-  selectedFile = photoInput.files && photoInput.files[0] ? photoInput.files[0] : null;
+  const f = photoInput.files && photoInput.files[0] ? photoInput.files[0] : null;
+  selectedFile = f;
   updateUIFromFile();
 }
+
+/**
+ * ✅ Android fix:
+ * Some Android browsers are flaky when opening camera via <label for="...">.
+ * We keep label (iOS best), but ALSO, on Android, we call input.click() explicitly.
+ */
+if (pickBtn && isAndroid) {
+  pickBtn.addEventListener("click", (e) => {
+    // Prevent the label default from being the only mechanism on Android
+    e.preventDefault();
+    try {
+      photoInput.click();
+    } catch {
+      // ignore
+    }
+  });
+}
+
+/**
+ * ✅ When returning from camera, sometimes change doesn't fire.
+ * Re-check files when the tab regains focus / becomes visible.
+ */
+function delayedReRead() {
+  setTimeout(readFileFromInput, 50);
+  setTimeout(readFileFromInput, 150);
+  setTimeout(readFileFromInput, 350);
+}
+
+window.addEventListener("focus", delayedReRead);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) delayedReRead();
+});
+
+photoInput.addEventListener("change", () => {
+  readFileFromInput();
+  delayedReRead();
+});
+
+photoInput.addEventListener("input", () => {
+  readFileFromInput();
+  delayedReRead();
+});
 
 function isHeicLike(file) {
   const name = (file?.name || "").toLowerCase();
@@ -114,7 +140,6 @@ function isHeicLike(file) {
 }
 
 async function compressImageToJpegBlob(file) {
-  // HEIC/HEIF can't usually be processed in browsers (especially desktop)
   if (isHeicLike(file)) {
     throw new Error(
       "נבחר קובץ HEIC/HEIF (נפוץ באייפון/מק). הדפדפן לא מצליח לעבד אותו. " +
@@ -122,7 +147,6 @@ async function compressImageToJpegBlob(file) {
     );
   }
 
-  // Prefer createImageBitmap (more reliable on some browsers)
   let bitmap = null;
   if ("createImageBitmap" in window) {
     try {
@@ -139,7 +163,7 @@ async function compressImageToJpegBlob(file) {
     bitmap = img;
   }
 
-  const maxSize = 1600; // px
+  const maxSize = 1600;
   let width = bitmap.width;
   let height = bitmap.height;
 
@@ -157,7 +181,6 @@ async function compressImageToJpegBlob(file) {
   const ctx = canvas.getContext("2d");
   ctx.drawImage(bitmap, 0, 0, width, height);
 
-  // free bitmap if it's an ImageBitmap
   if (bitmap && bitmap.close) {
     try { bitmap.close(); } catch {}
   }
@@ -167,10 +190,6 @@ async function compressImageToJpegBlob(file) {
   });
 }
 
-/**
- * ✅ Upload with real progress (better UX on slow networks)
- * Uses XHR because fetch() doesn't provide upload progress events.
- */
 function uploadWithProgress(formData) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -187,9 +206,8 @@ function uploadWithProgress(formData) {
     xhr.onload = () => {
       const raw = xhr.responseText || "";
       const ct = (xhr.getResponseHeader("content-type") || "").toLowerCase();
-
-      // Robust handling if server returns HTML/text (cold start, gateway, etc.)
       const looksJson = ct.includes("application/json") || raw.trim().startsWith("{");
+
       if (!looksJson) {
         const snippet = raw.trim().replace(/\s+/g, " ").slice(0, 200);
         return reject(new Error(`שגיאת שרת (${xhr.status}). ${snippet || "תגובה לא-JSON"}`));
@@ -212,23 +230,11 @@ function uploadWithProgress(formData) {
 
     xhr.onerror = () => reject(new Error("שגיאת רשת. נסו שוב."));
     xhr.ontimeout = () => reject(new Error("תם הזמן להעלאה. נסו שוב."));
-    xhr.timeout = 240000; // 4 minutes
+    xhr.timeout = 240000;
 
     xhr.send(formData);
   });
 }
-
-photoInput.addEventListener("change", () => {
-  readFileFromInput();
-  setTimeout(readFileFromInput, 80);
-  setTimeout(readFileFromInput, 200);
-});
-
-photoInput.addEventListener("input", () => {
-  readFileFromInput();
-  setTimeout(readFileFromInput, 80);
-  setTimeout(readFileFromInput, 200);
-});
 
 uploadBtn.addEventListener("click", async () => {
   if (uploading) return;
@@ -246,16 +252,12 @@ uploadBtn.addEventListener("click", async () => {
   try {
     setStatus("מכין תמונה...");
 
-    // ✅ Try compress.
-    // ✅ If compression fails (big PNG/canvas limits), fallback to original file.
     try {
       const compressedBlob = await compressImageToJpegBlob(selectedFile);
       if (!compressedBlob) throw new Error("לא ניתן לדחוס את התמונה");
       formData.append("photo", compressedBlob, "photo.jpg");
     } catch (e) {
-      // HEIC: show a helpful message (don’t upload original HEIC blindly)
       if (isHeicLike(selectedFile)) throw e;
-
       console.warn("Compression failed, uploading original file:", e);
       formData.append("photo", selectedFile, selectedFile.name || "image");
     }
@@ -270,7 +272,6 @@ uploadBtn.addEventListener("click", async () => {
 
     setStatus("✅ הועלה בהצלחה", "ok");
 
-    // Reset for next upload
     selectedFile = null;
     photoInput.value = "";
     nameInput.value = "";
