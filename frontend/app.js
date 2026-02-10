@@ -24,10 +24,8 @@ if (localStorage.getItem("landing_ok") !== "1") {
   const ua = navigator.userAgent || "";
   const isAndroid = /Android/i.test(ua);
   if (isAndroid) {
-    // adds "Take photo" option on many Android devices
     photoInput.setAttribute("capture", "environment");
   } else {
-    // ensure iPhone can still choose from photo library
     photoInput.removeAttribute("capture");
   }
 })();
@@ -46,6 +44,27 @@ function setUploading(isUploading) {
   btnText.textContent = isUploading ? "מעלה..." : "העלאה";
 }
 
+/**
+ * ✅ Prevent "blank page" on Android/Mac:
+ * Large previews can push all UI off-screen.
+ * Force preview to stay within viewport.
+ */
+function applyPreviewConstraints() {
+  if (!preview) return;
+
+  // Ensure the preview can't take the whole page
+  preview.style.width = "100%";
+  preview.style.maxHeight = "45vh";
+  preview.style.objectFit = "contain";
+
+  // If there is a parent container, also constrain it
+  const parent = preview.parentElement;
+  if (parent) {
+    parent.style.maxHeight = "45vh";
+    parent.style.overflow = "hidden";
+  }
+}
+
 function updateUIFromFile() {
   if (!selectedFile) {
     fileNameEl.textContent = "לא נבחרה תמונה";
@@ -55,10 +74,23 @@ function updateUIFromFile() {
   }
 
   fileNameEl.textContent = selectedFile.name || "נבחרה תמונה";
+
+  // Apply constraints before showing
+  applyPreviewConstraints();
+
+  // Show preview (safe across platforms)
   preview.src = URL.createObjectURL(selectedFile);
   preview.style.display = "block";
+
   uploadBtn.disabled = false;
   setStatus("");
+
+  // Optional: keep the action buttons visible after capture on small screens
+  try {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  } catch {
+    window.scrollTo(0, 0);
+  }
 }
 
 /**
@@ -82,15 +114,15 @@ function isHeicLike(file) {
 }
 
 async function compressImageToJpegBlob(file) {
-  // HEIC/HEIF usually can't be decoded in browsers; fail fast with a helpful message.
+  // HEIC/HEIF can't usually be processed in browsers (especially desktop)
   if (isHeicLike(file)) {
     throw new Error(
       "נבחר קובץ HEIC/HEIF (נפוץ באייפון/מק). הדפדפן לא מצליח לעבד אותו. " +
-      "בבקשה המירו ל-JPG (למשל Share/Export כ-JPEG) או צלמו מחדש בתוך הדפדפן."
+      "בבקשה המירו ל-JPG (Export כ-JPEG) או צלמו מחדש בתוך הדפדפן."
     );
   }
 
-  // Use createImageBitmap if possible (more reliable in some browsers)
+  // Prefer createImageBitmap (more reliable on some browsers)
   let bitmap = null;
   if ("createImageBitmap" in window) {
     try {
@@ -122,7 +154,6 @@ async function compressImageToJpegBlob(file) {
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
-
   const ctx = canvas.getContext("2d");
   ctx.drawImage(bitmap, 0, 0, width, height);
 
@@ -132,101 +163,59 @@ async function compressImageToJpegBlob(file) {
   }
 
   return new Promise((resolve) => {
-    canvas.toBlob(
-      (blob) => resolve(blob),
-      "image/jpeg",
-      0.75
-    );
+    canvas.toBlob((blob) => resolve(blob), "image/jpeg", 0.75);
   });
-}
-
-function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
 }
 
 /**
  * ✅ Upload with real progress (better UX on slow networks)
- * ✅ Robust error parsing for non-JSON responses (common on cold start / gateway)
- * ✅ Retry once on 502/503/504
+ * Uses XHR because fetch() doesn't provide upload progress events.
  */
 function uploadWithProgress(formData) {
-  const doOnce = () =>
-    new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open("POST", `${BACKEND_URL}/upload`, true);
-      xhr.setRequestHeader("Accept", "application/json");
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${BACKEND_URL}/upload`, true);
+    xhr.setRequestHeader("Accept", "application/json");
 
-      xhr.upload.onprogress = (e) => {
-        if (!e.lengthComputable) return;
-        const pct = Math.max(1, Math.min(99, Math.round((e.loaded / e.total) * 100)));
-        setStatus(`אנא המתן...`);
-        btnText.textContent = `מעלה... ${pct}%`;
-      };
+    xhr.upload.onprogress = (e) => {
+      if (!e.lengthComputable) return;
+      const pct = Math.max(1, Math.min(99, Math.round((e.loaded / e.total) * 100)));
+      setStatus("אנא המתן...");
+      btnText.textContent = `מעלה... ${pct}%`;
+    };
 
-      xhr.onload = () => {
-        const status = xhr.status;
-        const raw = xhr.responseText || "";
-        const contentType = (xhr.getResponseHeader("content-type") || "").toLowerCase();
+    xhr.onload = () => {
+      const raw = xhr.responseText || "";
+      const ct = (xhr.getResponseHeader("content-type") || "").toLowerCase();
 
-        const looksJson =
-          contentType.includes("application/json") || raw.trim().startsWith("{");
-
-        if (!looksJson) {
-          const snippet = raw.trim().replace(/\s+/g, " ").slice(0, 200);
-          const msg = snippet
-            ? `שגיאת שרת (${status}). ${snippet}`
-            : `שגיאת שרת (${status}). תגובה לא-JSON`;
-          const err = new Error(msg);
-          err.status = status;
-          return reject(err);
-        }
-
-        let data = null;
-        try {
-          data = JSON.parse(raw || "{}");
-        } catch (_) {
-          const err = new Error(`שגיאת שרת (${status}). JSON לא תקין`);
-          err.status = status;
-          return reject(err);
-        }
-
-        if (status >= 200 && status < 300 && data && data.ok) {
-          return resolve(data);
-        }
-
-        const msg = (data && data.error) ? data.error : "העלאה נכשלה";
-        const err = new Error(msg);
-        err.status = status;
-        return reject(err);
-      };
-
-      xhr.onerror = () => {
-        const err = new Error("שגיאת רשת. נסו שוב.");
-        err.status = 0;
-        reject(err);
-      };
-      xhr.ontimeout = () => {
-        const err = new Error("תם הזמן להעלאה. נסו שוב.");
-        err.status = 0;
-        reject(err);
-      };
-
-      xhr.timeout = 240000; // 4 minutes
-      xhr.send(formData);
-    });
-
-  return (async () => {
-    try {
-      return await doOnce();
-    } catch (e) {
-      if (e && (e.status === 502 || e.status === 503 || e.status === 504)) {
-        setStatus("השרת מתעורר... מנסה שוב");
-        await sleep(2000);
-        return await doOnce();
+      // Robust handling if server returns HTML/text (cold start, gateway, etc.)
+      const looksJson = ct.includes("application/json") || raw.trim().startsWith("{");
+      if (!looksJson) {
+        const snippet = raw.trim().replace(/\s+/g, " ").slice(0, 200);
+        return reject(new Error(`שגיאת שרת (${xhr.status}). ${snippet || "תגובה לא-JSON"}`));
       }
-      throw e;
-    }
-  })();
+
+      let data = null;
+      try {
+        data = JSON.parse(raw || "{}");
+      } catch (_) {
+        return reject(new Error(`שגיאת שרת (${xhr.status}). JSON לא תקין`));
+      }
+
+      if (xhr.status >= 200 && xhr.status < 300 && data && data.ok) {
+        return resolve(data);
+      }
+
+      const msg = (data && data.error) ? data.error : "העלאה נכשלה";
+      return reject(new Error(msg));
+    };
+
+    xhr.onerror = () => reject(new Error("שגיאת רשת. נסו שוב."));
+    xhr.ontimeout = () => reject(new Error("תם הזמן להעלאה. נסו שוב."));
+    xhr.timeout = 240000; // 4 minutes
+
+    xhr.send(formData);
+  });
 }
 
 photoInput.addEventListener("change", () => {
@@ -257,15 +246,18 @@ uploadBtn.addEventListener("click", async () => {
   try {
     setStatus("מכין תמונה...");
 
-    // Try compress. If compression fails for non-HEIC reasons, fallback to original file.
+    // ✅ Try compress.
+    // ✅ If compression fails (big PNG/canvas limits), fallback to original file.
     try {
-      const blob = await compressImageToJpegBlob(selectedFile);
-      if (!blob) throw new Error("compress returned empty blob");
-      formData.append("photo", blob, "photo.jpg");
+      const compressedBlob = await compressImageToJpegBlob(selectedFile);
+      if (!compressedBlob) throw new Error("לא ניתן לדחוס את התמונה");
+      formData.append("photo", compressedBlob, "photo.jpg");
     } catch (e) {
+      // HEIC: show a helpful message (don’t upload original HEIC blindly)
       if (isHeicLike(selectedFile)) throw e;
+
       console.warn("Compression failed, uploading original file:", e);
-      formData.append("photo", selectedFile, selectedFile.name || "photo");
+      formData.append("photo", selectedFile, selectedFile.name || "image");
     }
 
     formData.append("name", safeName);
@@ -278,6 +270,7 @@ uploadBtn.addEventListener("click", async () => {
 
     setStatus("✅ הועלה בהצלחה", "ok");
 
+    // Reset for next upload
     selectedFile = null;
     photoInput.value = "";
     nameInput.value = "";
