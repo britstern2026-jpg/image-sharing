@@ -29,6 +29,14 @@ const ua = navigator.userAgent || "";
 const isAndroid = /Android/i.test(ua);
 
 /**
+ * ✅ NEW: Hide the iOS-style button on Android only.
+ * iOS stays exactly the same.
+ */
+if (isAndroid && pickBtn) {
+  pickBtn.style.display = "none";
+}
+
+/**
  * ✅ CRITICAL FIX:
  * Now that we have a dedicated camera input (photoInputCamera),
  * DO NOT set capture on the normal input (photoInput).
