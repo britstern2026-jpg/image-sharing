@@ -57,66 +57,97 @@ function readFileFromInput() {
   updateUIFromFile();
 }
 
-async function compressImage(file) {
-  const img = new Image();
-  img.src = URL.createObjectURL(file);
-  await img.decode();
+function isHeicLike(file) {
+  const name = (file?.name || "").toLowerCase();
+  const type = (file?.type || "").toLowerCase();
+  return (
+    type.includes("image/heic") ||
+    type.includes("image/heif") ||
+    name.endsWith(".heic") ||
+    name.endsWith(".heif")
+  );
+}
+
+async function compressImageToJpegBlob(file) {
+  // HEIC/HEIF usually can't be decoded in browsers; fail fast with a helpful message.
+  if (isHeicLike(file)) {
+    throw new Error(
+      "נבחר קובץ HEIC/HEIF (נפוץ באייפון/מק). הדפדפן לא מצליח לעבד אותו. " +
+      "בבקשה המירו ל-JPG (למשל Share/Export כ-JPEG) או צלמו מחדש בתוך הדפדפן."
+    );
+  }
+
+  // Use createImageBitmap if possible (more reliable in some browsers)
+  let bitmap = null;
+  if ("createImageBitmap" in window) {
+    try {
+      bitmap = await createImageBitmap(file);
+    } catch {
+      bitmap = null;
+    }
+  }
+
+  if (!bitmap) {
+    const img = new Image();
+    img.src = URL.createObjectURL(file);
+    await img.decode();
+    bitmap = img;
+  }
 
   const maxSize = 1600; // px
-  let { width, height } = img;
+  let width = bitmap.width;
+  let height = bitmap.height;
 
   if (width > height && width > maxSize) {
-    height *= maxSize / width;
+    height = Math.round(height * (maxSize / width));
     width = maxSize;
   } else if (height > maxSize) {
-    width *= maxSize / height;
+    width = Math.round(width * (maxSize / height));
     height = maxSize;
   }
 
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
+
   const ctx = canvas.getContext("2d");
-  ctx.drawImage(img, 0, 0, width, height);
+  ctx.drawImage(bitmap, 0, 0, width, height);
+
+  // free bitmap if it's an ImageBitmap
+  if (bitmap && bitmap.close) {
+    try { bitmap.close(); } catch {}
+  }
 
   return new Promise((resolve) => {
     canvas.toBlob(
       (blob) => resolve(blob),
       "image/jpeg",
-      0.75 // quality (sweet spot)
+      0.75
     );
   });
 }
 
 /**
  * ✅ Upload with real progress (better UX on slow networks)
- * Uses XHR because fetch() doesn't provide upload progress events.
  */
 function uploadWithProgress(formData) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${BACKEND_URL}/upload`, true);
-
-    // Optional: helps backend know we want JSON
     xhr.setRequestHeader("Accept", "application/json");
 
     xhr.upload.onprogress = (e) => {
       if (!e.lengthComputable) return;
-
       const pct = Math.max(1, Math.min(99, Math.round((e.loaded / e.total) * 100)));
-
-      // Keep spinner + disable button via setUploading(true)
-      setStatus(`אנא המתן... `);
+      setStatus(`אנא המתן...`);
       btnText.textContent = `מעלה... ${pct}%`;
     };
 
     xhr.onload = () => {
-      // Try parse JSON even on non-200 to extract error message
       let data = null;
       try {
         data = JSON.parse(xhr.responseText || "{}");
       } catch (_) {
-        // If backend returns HTML or something unexpected
         return reject(new Error("תגובה לא תקינה מהשרת"));
       }
 
@@ -130,7 +161,7 @@ function uploadWithProgress(formData) {
 
     xhr.onerror = () => reject(new Error("שגיאת רשת. נסו שוב."));
     xhr.ontimeout = () => reject(new Error("תם הזמן להעלאה. נסו שוב."));
-    xhr.timeout = 120000; // 2 minutes (adjust if you want)
+    xhr.timeout = 180000; // 3 minutes
 
     xhr.send(formData);
   });
@@ -162,33 +193,40 @@ uploadBtn.addEventListener("click", async () => {
   const formData = new FormData();
 
   try {
-    // ✅ Compress first (already improves speed)
     setStatus("מכין תמונה...");
-    const compressedBlob = await compressImage(selectedFile);
-    if (!compressedBlob) throw new Error("לא ניתן לדחוס את התמונה");
 
-    formData.append("photo", compressedBlob, "photo.jpg");
+    // Try compress. If compression fails for non-HEIC reasons, fallback to original file.
+    let blob = null;
+    try {
+      blob = await compressImageToJpegBlob(selectedFile);
+      if (!blob) throw new Error("compress returned empty blob");
+      formData.append("photo", blob, "photo.jpg");
+    } catch (e) {
+      // If it's HEIC error, we want the message to show (no fallback).
+      if (isHeicLike(selectedFile)) throw e;
+
+      // fallback: upload original
+      console.warn("Compression failed, uploading original file:", e);
+      formData.append("photo", selectedFile, selectedFile.name || "photo");
+    }
+
     formData.append("name", safeName);
     formData.append("visibility", publicCheckbox.checked ? "public" : "private");
 
     setUploading(true);
     setStatus("מעלה...");
 
-    // ✅ Use progress upload
     await uploadWithProgress(formData);
 
     setStatus("✅ הועלה בהצלחה", "ok");
 
-    // Reset for next upload
     selectedFile = null;
     photoInput.value = "";
     nameInput.value = "";
-    publicCheckbox.checked = true; // default to everyone
+    publicCheckbox.checked = true;
     updateUIFromFile();
 
-    // Restore button text (in case progress overwrote it)
     btnText.textContent = "העלאה";
-
     setTimeout(() => setStatus(""), 3500);
   } catch (err) {
     setStatus(`❌ שגיאה: ${err.message}`, "err");
