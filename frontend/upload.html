@@ -56,6 +56,20 @@
 <!--          class="realFileInput"-->
 <!--        />-->
 
+        <!-- ✅ ADD: Android-only camera input (more reliable than label->single input) -->
+        <input
+          id="photoInputCamera"
+          type="file"
+          accept="image/*"
+          capture="environment"
+          class="realFileInput"
+        />
+
+        <!-- ✅ ADD: Android-only camera button (shown only on Android via JS) -->
+        <button id="androidCameraBtn" type="button" class="btnSecondary" style="display:none">
+          📷 צילום במצלמה
+        </button>
+
         <!-- ✅ Most reliable on iOS: use LABEL styled like a button -->
         <label for="photoInput" id="pickBtn" class="btnSecondary">
           לבחור / לצלם תמונה

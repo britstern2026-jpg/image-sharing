@@ -9,6 +9,10 @@ const uploadBtn = document.getElementById("uploadBtn");
 const statusEl = document.getElementById("status");
 const publicCheckbox = document.getElementById("publicCheckbox");
 
+// ✅ ADD: Android-only camera input + button (optional on other platforms)
+const photoInputCamera = document.getElementById("photoInputCamera");
+const androidCameraBtn = document.getElementById("androidCameraBtn");
+
 const btnText = uploadBtn.querySelector(".btnText");
 const spinner = uploadBtn.querySelector(".spinner");
 
@@ -24,10 +28,24 @@ const ua = navigator.userAgent || "";
 const isAndroid = /Android/i.test(ua);
 
 // ✅ Android only: hint camera availability without breaking iPhone gallery selection
+// NOTE: We keep this (as you already had). The real fix is the dedicated camera input.
 if (isAndroid) {
   photoInput.setAttribute("capture", "environment");
 } else {
   photoInput.removeAttribute("capture");
+}
+
+// ✅ ADD: Show Android camera button if available
+if (isAndroid && androidCameraBtn && photoInputCamera) {
+  androidCameraBtn.style.display = "block";
+  androidCameraBtn.addEventListener("click", () => {
+    // Open Android camera reliably
+    try {
+      photoInputCamera.click();
+    } catch {
+      // ignore
+    }
+  });
 }
 
 function setStatus(msg, type = "") {
@@ -80,8 +98,17 @@ function updateUIFromFile() {
   }
 }
 
+// ✅ Keep your original read function (for photoInput)
 function readFileFromInput() {
   const f = photoInput.files && photoInput.files[0] ? photoInput.files[0] : null;
+  selectedFile = f;
+  updateUIFromFile();
+}
+
+// ✅ ADD: read for Android camera-dedicated input
+function readFileFromCameraInput() {
+  if (!photoInputCamera) return;
+  const f = photoInputCamera.files && photoInputCamera.files[0] ? photoInputCamera.files[0] : null;
   selectedFile = f;
   updateUIFromFile();
 }
@@ -111,6 +138,11 @@ function delayedReRead() {
   setTimeout(readFileFromInput, 50);
   setTimeout(readFileFromInput, 150);
   setTimeout(readFileFromInput, 350);
+
+  // ✅ ADD: also re-check dedicated camera input
+  setTimeout(readFileFromCameraInput, 50);
+  setTimeout(readFileFromCameraInput, 150);
+  setTimeout(readFileFromCameraInput, 350);
 }
 
 window.addEventListener("focus", delayedReRead);
@@ -127,6 +159,19 @@ photoInput.addEventListener("input", () => {
   readFileFromInput();
   delayedReRead();
 });
+
+// ✅ ADD: handlers for the Android dedicated camera input
+if (photoInputCamera) {
+  photoInputCamera.addEventListener("change", () => {
+    readFileFromCameraInput();
+    delayedReRead();
+  });
+
+  photoInputCamera.addEventListener("input", () => {
+    readFileFromCameraInput();
+    delayedReRead();
+  });
+}
 
 function isHeicLike(file) {
   const name = (file?.name || "").toLowerCase();
@@ -273,7 +318,11 @@ uploadBtn.addEventListener("click", async () => {
     setStatus("✅ הועלה בהצלחה", "ok");
 
     selectedFile = null;
+
+    // ✅ Clear BOTH inputs (don't delete; just reset state)
     photoInput.value = "";
+    if (photoInputCamera) photoInputCamera.value = "";
+
     nameInput.value = "";
     publicCheckbox.checked = true;
     updateUIFromFile();
