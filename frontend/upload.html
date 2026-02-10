@@ -27,7 +27,6 @@
         <small class="hint">כך תוכלו לבחור את השם שלכם בגלריה ולצפות בכל התמונות שלכם.</small>
       </div>
 
-      <!-- ✅ Visibility checkbox (already exists) -->
       <div class="field">
         <label>מי יכול לראות?</label>
 
@@ -46,17 +45,10 @@
       <div class="field">
         <label>צילום / בחירת תמונה</label>
 
-        <!-- ✅ Real file input: must exist for iPhone Chrome -->
+        <!-- ✅ Normal input (PC + iOS + Android gallery) -->
         <input id="photoInput" type="file" accept="image/*" class="realFileInput" />
-<!--        <input-->
-<!--          id="photoInput"-->
-<!--          type="file"-->
-<!--          accept="image/*"-->
-<!--          capture="environment"-->
-<!--          class="realFileInput"-->
-<!--        />-->
 
-        <!-- ✅ ADD: Android-only camera input (more reliable than label->single input) -->
+        <!-- ✅ Android-only camera input -->
         <input
           id="photoInputCamera"
           type="file"
@@ -65,12 +57,17 @@
           class="realFileInput"
         />
 
-        <!-- ✅ ADD: Android-only camera button (shown only on Android via JS) -->
+        <!-- ✅ Android-only camera button -->
         <button id="androidCameraBtn" type="button" class="btnSecondary" style="display:none">
           📷 צילום במצלמה
         </button>
 
-        <!-- ✅ Most reliable on iOS: use LABEL styled like a button -->
+        <!-- ✅ ADD: Android-only library button -->
+        <button id="androidLibraryBtn" type="button" class="btnSecondary" style="display:none">
+          🖼️ בחירה מהגלריה
+        </button>
+
+        <!-- ✅ iOS-friendly label button (also works on PC/Android) -->
         <label for="photoInput" id="pickBtn" class="btnSecondary">
           לבחור / לצלם תמונה
         </label>
@@ -89,7 +86,6 @@
 
       <p id="status" class="status"></p>
 
-      <!-- ✅ NEW: Gallery button -->
       <a class="btnSecondary" href="gallery.html" style="margin-top: 12px; text-decoration: none;">
         צפייה בגלריה 📸
       </a>

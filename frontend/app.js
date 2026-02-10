@@ -9,9 +9,10 @@ const uploadBtn = document.getElementById("uploadBtn");
 const statusEl = document.getElementById("status");
 const publicCheckbox = document.getElementById("publicCheckbox");
 
-// ✅ ADD: Android-only camera input + button (optional on other platforms)
+// ✅ Android-only inputs/buttons
 const photoInputCamera = document.getElementById("photoInputCamera");
 const androidCameraBtn = document.getElementById("androidCameraBtn");
+const androidLibraryBtn = document.getElementById("androidLibraryBtn");
 
 const btnText = uploadBtn.querySelector(".btnText");
 const spinner = uploadBtn.querySelector(".spinner");
@@ -28,23 +29,25 @@ const ua = navigator.userAgent || "";
 const isAndroid = /Android/i.test(ua);
 
 // ✅ Android only: hint camera availability without breaking iPhone gallery selection
-// NOTE: We keep this (as you already had). The real fix is the dedicated camera input.
 if (isAndroid) {
   photoInput.setAttribute("capture", "environment");
 } else {
   photoInput.removeAttribute("capture");
 }
 
-// ✅ ADD: Show Android camera button if available
+// ✅ Show Android buttons
 if (isAndroid && androidCameraBtn && photoInputCamera) {
   androidCameraBtn.style.display = "block";
   androidCameraBtn.addEventListener("click", () => {
-    // Open Android camera reliably
-    try {
-      photoInputCamera.click();
-    } catch {
-      // ignore
-    }
+    try { photoInputCamera.click(); } catch {}
+  });
+}
+
+if (isAndroid && androidLibraryBtn) {
+  androidLibraryBtn.style.display = "block";
+  androidLibraryBtn.addEventListener("click", () => {
+    // open regular gallery input
+    try { photoInput.click(); } catch {}
   });
 }
 
@@ -90,7 +93,6 @@ function updateUIFromFile() {
   uploadBtn.disabled = false;
   setStatus("");
 
-  // Keep UI visible on small screens after camera return
   try {
     window.scrollTo({ top: 0, behavior: "smooth" });
   } catch {
@@ -98,14 +100,12 @@ function updateUIFromFile() {
   }
 }
 
-// ✅ Keep your original read function (for photoInput)
 function readFileFromInput() {
   const f = photoInput.files && photoInput.files[0] ? photoInput.files[0] : null;
   selectedFile = f;
   updateUIFromFile();
 }
 
-// ✅ ADD: read for Android camera-dedicated input
 function readFileFromCameraInput() {
   if (!photoInputCamera) return;
   const f = photoInputCamera.files && photoInputCamera.files[0] ? photoInputCamera.files[0] : null;
@@ -114,32 +114,20 @@ function readFileFromCameraInput() {
 }
 
 /**
- * ✅ Android fix:
- * Some Android browsers are flaky when opening camera via <label for="...">.
- * We keep label (iOS best), but ALSO, on Android, we call input.click() explicitly.
+ * Keep your label behavior. On Android we already provide explicit buttons too.
  */
 if (pickBtn && isAndroid) {
   pickBtn.addEventListener("click", (e) => {
-    // Prevent the label default from being the only mechanism on Android
     e.preventDefault();
-    try {
-      photoInput.click();
-    } catch {
-      // ignore
-    }
+    try { photoInput.click(); } catch {}
   });
 }
 
-/**
- * ✅ When returning from camera, sometimes change doesn't fire.
- * Re-check files when the tab regains focus / becomes visible.
- */
 function delayedReRead() {
   setTimeout(readFileFromInput, 50);
   setTimeout(readFileFromInput, 150);
   setTimeout(readFileFromInput, 350);
 
-  // ✅ ADD: also re-check dedicated camera input
   setTimeout(readFileFromCameraInput, 50);
   setTimeout(readFileFromCameraInput, 150);
   setTimeout(readFileFromCameraInput, 350);
@@ -160,13 +148,11 @@ photoInput.addEventListener("input", () => {
   delayedReRead();
 });
 
-// ✅ ADD: handlers for the Android dedicated camera input
 if (photoInputCamera) {
   photoInputCamera.addEventListener("change", () => {
     readFileFromCameraInput();
     delayedReRead();
   });
-
   photoInputCamera.addEventListener("input", () => {
     readFileFromCameraInput();
     delayedReRead();
@@ -318,11 +304,8 @@ uploadBtn.addEventListener("click", async () => {
     setStatus("✅ הועלה בהצלחה", "ok");
 
     selectedFile = null;
-
-    // ✅ Clear BOTH inputs (don't delete; just reset state)
     photoInput.value = "";
     if (photoInputCamera) photoInputCamera.value = "";
-
     nameInput.value = "";
     publicCheckbox.checked = true;
     updateUIFromFile();
