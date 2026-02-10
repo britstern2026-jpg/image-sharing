@@ -19,6 +19,19 @@ if (localStorage.getItem("landing_ok") !== "1") {
   window.location.href = "landing.html";
 }
 
+// ✅ Android only: hint camera availability without breaking iPhone gallery selection
+(() => {
+  const ua = navigator.userAgent || "";
+  const isAndroid = /Android/i.test(ua);
+  if (isAndroid) {
+    // adds "Take photo" option on many Android devices
+    photoInput.setAttribute("capture", "environment");
+  } else {
+    // ensure iPhone can still choose from photo library
+    photoInput.removeAttribute("capture");
+  }
+})();
+
 function setStatus(msg, type = "") {
   statusEl.textContent = msg || "";
   statusEl.classList.remove("ok", "err");
@@ -196,16 +209,12 @@ uploadBtn.addEventListener("click", async () => {
     setStatus("מכין תמונה...");
 
     // Try compress. If compression fails for non-HEIC reasons, fallback to original file.
-    let blob = null;
     try {
-      blob = await compressImageToJpegBlob(selectedFile);
+      const blob = await compressImageToJpegBlob(selectedFile);
       if (!blob) throw new Error("compress returned empty blob");
       formData.append("photo", blob, "photo.jpg");
     } catch (e) {
-      // If it's HEIC error, we want the message to show (no fallback).
       if (isHeicLike(selectedFile)) throw e;
-
-      // fallback: upload original
       console.warn("Compression failed, uploading original file:", e);
       formData.append("photo", selectedFile, selectedFile.name || "photo");
     }
