@@ -140,44 +140,93 @@ async function compressImageToJpegBlob(file) {
   });
 }
 
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 /**
  * ✅ Upload with real progress (better UX on slow networks)
+ * ✅ Robust error parsing for non-JSON responses (common on cold start / gateway)
+ * ✅ Retry once on 502/503/504
  */
 function uploadWithProgress(formData) {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", `${BACKEND_URL}/upload`, true);
-    xhr.setRequestHeader("Accept", "application/json");
+  const doOnce = () =>
+    new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `${BACKEND_URL}/upload`, true);
+      xhr.setRequestHeader("Accept", "application/json");
 
-    xhr.upload.onprogress = (e) => {
-      if (!e.lengthComputable) return;
-      const pct = Math.max(1, Math.min(99, Math.round((e.loaded / e.total) * 100)));
-      setStatus(`אנא המתן...`);
-      btnText.textContent = `מעלה... ${pct}%`;
-    };
+      xhr.upload.onprogress = (e) => {
+        if (!e.lengthComputable) return;
+        const pct = Math.max(1, Math.min(99, Math.round((e.loaded / e.total) * 100)));
+        setStatus(`אנא המתן...`);
+        btnText.textContent = `מעלה... ${pct}%`;
+      };
 
-    xhr.onload = () => {
-      let data = null;
-      try {
-        data = JSON.parse(xhr.responseText || "{}");
-      } catch (_) {
-        return reject(new Error("תגובה לא תקינה מהשרת"));
+      xhr.onload = () => {
+        const status = xhr.status;
+        const raw = xhr.responseText || "";
+        const contentType = (xhr.getResponseHeader("content-type") || "").toLowerCase();
+
+        const looksJson =
+          contentType.includes("application/json") || raw.trim().startsWith("{");
+
+        if (!looksJson) {
+          const snippet = raw.trim().replace(/\s+/g, " ").slice(0, 200);
+          const msg = snippet
+            ? `שגיאת שרת (${status}). ${snippet}`
+            : `שגיאת שרת (${status}). תגובה לא-JSON`;
+          const err = new Error(msg);
+          err.status = status;
+          return reject(err);
+        }
+
+        let data = null;
+        try {
+          data = JSON.parse(raw || "{}");
+        } catch (_) {
+          const err = new Error(`שגיאת שרת (${status}). JSON לא תקין`);
+          err.status = status;
+          return reject(err);
+        }
+
+        if (status >= 200 && status < 300 && data && data.ok) {
+          return resolve(data);
+        }
+
+        const msg = (data && data.error) ? data.error : "העלאה נכשלה";
+        const err = new Error(msg);
+        err.status = status;
+        return reject(err);
+      };
+
+      xhr.onerror = () => {
+        const err = new Error("שגיאת רשת. נסו שוב.");
+        err.status = 0;
+        reject(err);
+      };
+      xhr.ontimeout = () => {
+        const err = new Error("תם הזמן להעלאה. נסו שוב.");
+        err.status = 0;
+        reject(err);
+      };
+
+      xhr.timeout = 240000; // 4 minutes
+      xhr.send(formData);
+    });
+
+  return (async () => {
+    try {
+      return await doOnce();
+    } catch (e) {
+      if (e && (e.status === 502 || e.status === 503 || e.status === 504)) {
+        setStatus("השרת מתעורר... מנסה שוב");
+        await sleep(2000);
+        return await doOnce();
       }
-
-      if (xhr.status >= 200 && xhr.status < 300 && data && data.ok) {
-        return resolve(data);
-      }
-
-      const msg = (data && data.error) ? data.error : "העלאה נכשלה";
-      return reject(new Error(msg));
-    };
-
-    xhr.onerror = () => reject(new Error("שגיאת רשת. נסו שוב."));
-    xhr.ontimeout = () => reject(new Error("תם הזמן להעלאה. נסו שוב."));
-    xhr.timeout = 180000; // 3 minutes
-
-    xhr.send(formData);
-  });
+      throw e;
+    }
+  })();
 }
 
 photoInput.addEventListener("change", () => {
