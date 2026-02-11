@@ -28,10 +28,7 @@ if (localStorage.getItem("landing_ok") !== "1") {
 const ua = navigator.userAgent || "";
 const isAndroid = /Android/i.test(ua);
 
-/**
- * ✅ NEW: Hide the iOS-style button on Android only.
- * iOS stays exactly the same.
- */
+// ✅ Hide the iOS-style button on Android only (iOS unchanged)
 if (isAndroid && pickBtn) {
   pickBtn.style.display = "none";
 }
@@ -114,21 +111,28 @@ function updateUIFromFile() {
   }
 }
 
+/**
+ * ✅ IMPORTANT: never overwrite selectedFile with null during re-reads.
+ * Only update when we actually have a file.
+ */
 function readFileFromInput() {
   const f = photoInput.files && photoInput.files[0] ? photoInput.files[0] : null;
-  selectedFile = f;
-  updateUIFromFile();
+  if (f) {
+    selectedFile = f;
+    updateUIFromFile();
+  }
 }
 
 function readFileFromCameraInput() {
   if (!photoInputCamera) return;
   const f = photoInputCamera.files && photoInputCamera.files[0] ? photoInputCamera.files[0] : null;
-  selectedFile = f;
-  updateUIFromFile();
+  if (f) {
+    selectedFile = f;
+    updateUIFromFile();
+  }
 }
 
-// Keep your iOS-friendly label behavior.
-// On Android, we do NOT preventDefault anymore. It can still work as a fallback.
+// Keep your iOS-friendly label behavior (no change)
 if (pickBtn) {
   pickBtn.addEventListener("click", () => {
     // no-op; label default will open photoInput
@@ -150,24 +154,34 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden) delayedReRead();
 });
 
+// ✅ On real user selection, we DO allow null -> selectedFile (so clear works)
+// So we handle change events separately:
 photoInput.addEventListener("change", () => {
-  readFileFromInput();
+  const f = photoInput.files && photoInput.files[0] ? photoInput.files[0] : null;
+  selectedFile = f;
+  updateUIFromFile();
   delayedReRead();
 });
 
 photoInput.addEventListener("input", () => {
-  readFileFromInput();
+  const f = photoInput.files && photoInput.files[0] ? photoInput.files[0] : null;
+  selectedFile = f;
+  updateUIFromFile();
   delayedReRead();
 });
 
 if (photoInputCamera) {
   photoInputCamera.addEventListener("change", () => {
-    readFileFromCameraInput();
+    const f = photoInputCamera.files && photoInputCamera.files[0] ? photoInputCamera.files[0] : null;
+    selectedFile = f;
+    updateUIFromFile();
     delayedReRead();
   });
 
   photoInputCamera.addEventListener("input", () => {
-    readFileFromCameraInput();
+    const f = photoInputCamera.files && photoInputCamera.files[0] ? photoInputCamera.files[0] : null;
+    selectedFile = f;
+    updateUIFromFile();
     delayedReRead();
   });
 }
